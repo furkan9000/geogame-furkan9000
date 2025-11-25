@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Route Master - Home</title>
+    <style>
+        :root {
+            --taxi-yellow: #FFC107; 
+            --taxi-dark: #FFB300;
+            --asphalt: #212121; 
+            --dark-grey: #121212;
+            --light: #F5F5F5;
+            --accent-blue: #2979FF;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: var(--dark-grey);
+            color: var(--light);
+            line-height: 1.6;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        
+        .hero {
+            background: linear-gradient(135deg, rgba(0,0,0,0.8), rgba(0,0,0,0.6)), url('https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?q=80&w=2070&auto=format&fit=crop'); 
+            background-size: cover;
+            background-position: center;
+            height: 60vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            flex-direction: column;
+            padding: 20px;
+            border-bottom: 5px solid var(--taxi-yellow);
+        }
+
+        .hero h1 {
+            font-size: 4rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--taxi-yellow);
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            margin-bottom: 10px;
+        }
+
+        .hero p {
+            font-size: 1.5rem;
+            max-width: 600px;
+            margin-bottom: 30px;
+            color: #ddd;
+        }
+
+        /* Start Button */
+        .start-btn {
+            background-color: var(--taxi-yellow);
+            color: var(--asphalt);
+            padding: 15px 50px;
+            font-size: 1.5rem;
+            font-weight: bold;
+            text-decoration: none;
+            border-radius: 50px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(255, 193, 7, 0.4);
+            border: 2px solid var(--taxi-yellow);
+            text-transform: uppercase;
+        }
+
+        .start-btn:hover {
+            background-color: transparent;
+            color: var(--taxi-yellow);
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(255, 193, 7, 0.6);
+        }
+
+        /* How to Play Section */
+        .instructions {
+            padding: 60px 20px;
+            background-color: var(--asphalt);
+            flex-grow: 1;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .section-title {
+            text-align: center;
+            font-size: 2.5rem;
+            margin-bottom: 50px;
+            color: var(--light);
+            position: relative;
+        }
+
+        .section-title::after {
+            content: '';
+            display: block;
+            width: 80px;
+            height: 4px;
+            background-color: var(--taxi-yellow);
+            margin: 15px auto;
+        }
+
+        .steps-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 30px;
+        }
+
+        .step-card {
+            background-color: rgba(255,255,255,0.05);
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            transition: transform 0.3s ease;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .step-card:hover {
+            transform: translateY(-10px);
+            border-color: var(--taxi-yellow);
+        }
+
+        .icon {
+            font-size: 3.5rem;
+            margin-bottom: 20px;
+            display: block;
+        }
+
+        .step-card h3 {
+            color: var(--taxi-yellow);
+            margin-bottom: 15px;
+            font-size: 1.4rem;
+        }
+
+        .step-card p {
+            font-size: 1rem;
+            color: #ccc;
+        }
+
+       
+        footer {
+            background-color: #000;
+            text-align: center;
+            padding: 20px;
+            font-size: 0.9rem;
+            color: #777;
+            border-top: 1px solid #333;
+        }
+
+       
+        @media (max-width: 768px) {
+            .hero h1 { font-size: 2.5rem; }
+            .hero p { font-size: 1.1rem; }
+            .start-btn { padding: 12px 30px; font-size: 1.2rem; }
+        }
+    </style>
+</head>
+<body>
+
+   
+    <header class="hero">
+        <h1>Route Master</h1>
+        <p>Take the wheel on real city maps. Draw the shortest route, deliver passengers, race against time!</p>
+       <a href="game.html" class="start-btn">START GAME</a>
+    </header>
+
+
+    <section class="instructions">
+        <div class="container">
+            <h2 class="section-title">How to Play?</h2>
+            
+            <div class="steps-grid">
+              
+                <div class="step-card">
+                    <span class="icon">🚕</span>
+                    <h3>Locate Target</h3>
+                    <p>A random <strong>Taxi</strong> and <strong>Passenger</strong> will appear on the map when the game starts. Find them immediately!</p>
+                </div>
+
+              
+                <div class="step-card">
+                    <span class="icon">✏️</span>
+                    <h3>Draw Route</h3>
+                    <p>Click the "Start Drawing" button. Use your mouse to follow the roads and draw the shortest route from taxi to passenger.</p>
+                </div>
+
+                <div class="step-card">
+                    <span class="icon">⏱️</span>
+                    <h3>Race Against Time</h3>
+                    <p>You have <strong>3 minutes</strong> in total. Each successful route earns points. Incorrect drawings cost you time.</p>
+                </div>
+
+                <div class="step-card">
+                    <span class="icon">🏆</span>
+                    <h3>Score High</h3>
+                    <p>Earn extra points by drawing the shortest and most accurate path. Try to break your record before time runs out!</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <p>Developer: Furkan Ateş • GMT 458 – Web GIS • 2025-2026</p>
+    </footer>
+
+</body>
+</html>
+
