@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Route Master - Play</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    
+    <style>
+        :root {
+            --taxi-yellow: #FFC107;
+            --dark-bg: #121212;
+            --panel-bg: #1E1E1E;
+            --text-light: #F5F5F5;
+            --success: #4CAF50;
+            --danger: #F44336;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--dark-bg);
+            color: var(--text-light);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* --- Header --- */
+        header {
+            background-color: var(--panel-bg);
+            padding: 10px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 3px solid var(--taxi-yellow);
+            height: 60px;
+        }
+
+        h1 { margin: 0; font-size: 1.2rem; color: var(--taxi-yellow); text-transform: uppercase; }
+
+        .game-stats {
+            display: flex;
+            gap: 20px;
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+
+        .stat-box span { color: var(--taxi-yellow); }
+
+        /* --- Main Layout --- */
+        .main-container {
+            display: flex;
+            flex: 1;
+            height: calc(100% - 60px);
+        }
+
+        /* --- Map Area --- */
+        #map {
+            flex: 3;
+            height: 100%;
+            z-index: 1;
+        }
+
+        /* --- Sidebar / Controls --- */
+        .sidebar {
+            flex: 1;
+            background-color: var(--panel-bg);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            border-left: 1px solid #333;
+            max-width: 350px;
+            overflow-y: auto;
+        }
+
+        .control-panel {
+            margin-bottom: 20px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #333;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 10px;
+            border: none;
+            border-radius: 5px;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            transition: all 0.2s;
+        }
+
+        .btn-start { background-color: var(--taxi-yellow); color: #000; }
+        .btn-start:hover { background-color: #ffca2c; }
+
+        .btn-draw { background-color: #2196F3; color: white; }
+        .btn-draw:disabled { background-color: #555; cursor: not-allowed; }
+
+        .btn-finish { background-color: var(--success); color: white; }
+        .btn-finish:disabled { background-color: #555; }
+
+        .log-area {
+            flex: 1;
+            background-color: #000;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: 'Consolas', monospace;
+            font-size: 0.9rem;
+            overflow-y: auto;
+            border: 1px solid #333;
+        }
+
+        .log-entry { margin-bottom: 5px; padding-bottom: 5px; border-bottom: 1px solid #222; }
+        .log-success { color: var(--success); }
+        .log-error { color: var(--danger); }
+        .log-info { color: #aaa; }
+
+        /* --- Modal (Chart) --- */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.85);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background-color: var(--panel-bg);
+            padding: 30px;
+            border-radius: 10px;
+            width: 80%;
+            max-width: 600px;
+            text-align: center;
+            border: 2px solid var(--taxi-yellow);
+        }
+
+        /* Custom Leaflet Icons */
+        .emoji-icon {
+            font-size: 24px;
+            text-align: center;
+            line-height: 24px;
+        }
+
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Route Master 🚕</h1>
+        <div class="game-stats">
+            <div class="stat-box">TIME: <span id="timer">03:00</span></div>
+            <div class="stat-box">SCORE: <span id="score">0</span></div>
+            <div class="stat-box">ROUTES: <span id="routeCount">0</span></div>
+        </div>
+        <div>
+            <button onclick="window.location.href='index.html'" style="width:auto; padding:5px 15px; font-size:0.8rem;">EXIT</button>
+        </div>
+    </header>
+
+    <div class="main-container">
+        <!-- Harita Alanı -->
+        <div id="map"></div>
+
+        <!-- Kontrol Paneli -->
+        <div class="sidebar">
+            <div class="control-panel">
+                <h3>Controls</h3>
+                <button id="btnStartGame" class="btn-start" onclick="startGame()">▶ START GAME</button>
+                <div id="gameControls" style="display:none;">
+                    <button id="btnStartDraw" class="btn-draw" onclick="startDrawing()">✏️ START DRAWING</button>
+                    <button id="btnFinishDraw" class="btn-finish" onclick="finishDrawing()" disabled>✅ FINISH ROUTE</button>
+                </div>
+                <p style="font-size:0.8rem; color:#aaa; margin-top:10px;">
+                    <small>1. Click "Start Drawing"<br>2. Click on map to trace roads<br>3. Click "Finish Route"</small>
+                </p>
+            </div>
+            
+            <h3>Game Log</h3>
+            <div id="gameLog" class="log-area">
+                <div class="log-entry log-info">Waiting to start...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Oyun Sonu Modal (Grafik) -->
+    <div id="resultModal" class="modal">
+        <div class="modal-content">
+            <h2 style="color:var(--taxi-yellow)">GAME OVER!</h2>
+            <p>Total Score: <span id="finalScore" style="font-size:1.5rem; font-weight:bold;">0</span></p>
+            <div style="background:white; padding:10px; border-radius:5px; margin:20px 0;">
+                <canvas id="performanceChart"></canvas>
+            </div>
+            <button class="btn-start" onclick="location.reload()">PLAY AGAIN</button>
+        </div>
+    </div>
+
+    <!-- Scriptler -->
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/@turf/turf/turf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script>
+        // --- Değişkenler ---
+        let map;
+        let taxiMarker, passengerMarker;
+        let drawnPolyline;
+        let drawnPoints = [];
+        
+        let gameActive = false;
+        let isDrawing = false;
+        let timer = 180; // 3 dakika
+        let timerInterval;
+        let score = 0;
+        let completedRoutes = 0;
+        
+        // Taksi ve Yolcu Koordinatları (State)
+        let currentMission = {
+            taxi: null,
+            passenger: null
+        };
+
+        // İstatistikler (Chart.js için)
+        let stats = {
+            minute1: 0,
+            minute2: 0,
+            minute3: 0
+        };
+
+        // --- Başlangıç Ayarları ---
+        // New York Manhattan'ı merkez alalım (Sarı taksi konsepti için)
+        const CITY_CENTER = [40.7580, -73.9855]; // Times Square
+        const ZOOM_LEVEL = 14;
+
+        // --- Harita Yükleme ---
+        function initMap() {
+            map = L.map('map').setView(CITY_CENTER, ZOOM_LEVEL);
+
+            // Dark Mode Harita Katmanı (CartoDB Dark Matter)
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; OpenStreetMap &copy; CARTO',
+                subdomains: 'abcd',
+                maxZoom: 19
+            }).addTo(map);
+
+            // Tıklama olayını dinle (Çizim için)
+            map.on('click', function(e) {
+                if (isDrawing && gameActive) {
+                    addDrawingPoint(e.latlng);
+                }
+            });
+        }
+
+        // --- Oyun Mantığı ---
+
+        function startGame() {
+            if (gameActive) return;
+            
+            // Sıfırla
+            score = 0;
+            completedRoutes = 0;
+            timer = 180;
+            stats = { minute1: 0, minute2: 0, minute3: 0 };
+            updateUI();
+            
+            document.getElementById('gameLog').innerHTML = '';
+            log("Game Started! 3 minutes remaining.", "log-info");
+
+            // UI Güncelle
+            document.getElementById('btnStartGame').style.display = 'none';
+            document.getElementById('gameControls').style.display = 'block';
+            
+            gameActive = true;
+
+            // Zamanlayıcıyı Başlat
+            timerInterval = setInterval(() => {
+                timer--;
+                updateTimerDisplay();
+                if (timer <= 0) {
+                    endGame();
+                }
+            }, 1000);
+
+            spawnMission();
+        }
+
+        function endGame() {
+            clearInterval(timerInterval);
+            gameActive = false;
+            
+            // Modalı göster
+            document.getElementById('resultModal').style.display = 'flex';
+            document.getElementById('finalScore').innerText = score;
+            
+            renderChart();
+        }
+
+        // --- Görev Oluşturma (OSRM Nearest) ---
+        async function spawnMission() {
+            resetDrawingLayer();
+            log("Searching for new fare...", "log-info");
+
+            // Harita sınırları içinde rastgele nokta bul
+            const bounds = map.getBounds();
+            const rLat1 = bounds.getSouth() + Math.random() * (bounds.getNorth() - bounds.getSouth());
+            const rLng1 = bounds.getWest() + Math.random() * (bounds.getEast() - bounds.getWest());
+            
+            const rLat2 = bounds.getSouth() + Math.random() * (bounds.getNorth() - bounds.getSouth());
+            const rLng2 = bounds.getWest() + Math.random() * (bounds.getEast() - bounds.getWest());
+
+            // OSRM ile en yakın yola "yapıştır" (Snap to road)
+            try {
+                const p1 = await snapToRoad(rLat1, rLng1);
+                const p2 = await snapToRoad(rLat2, rLng2);
+
+                currentMission.taxi = p1;
+                currentMission.passenger = p2;
+
+                // Markerları ekle
+                if (taxiMarker) map.removeLayer(taxiMarker);
+                if (passengerMarker) map.removeLayer(passengerMarker);
+
+                const taxiIcon = L.divIcon({className: 'emoji-icon', html: '🚕', iconSize: [30, 30]});
+                const passIcon = L.divIcon({className: 'emoji-icon', html: '🧍', iconSize: [30, 30]});
+
+                taxiMarker = L.marker(p1, {icon: taxiIcon}).addTo(map).bindPopup("Start Here").openPopup();
+                passengerMarker = L.marker(p2, {icon: passIcon}).addTo(map).bindPopup("Drop Here");
+
+                log("New Fare! Connect Taxi 🚕 to Passenger 🧍", "log-success");
+
+            } catch (error) {
+                console.error(error);
+                log("Error finding road. Retrying...", "log-error");
+                spawnMission(); // Retry
+            }
+        }
+
+        async function snapToRoad(lat, lng) {
+            const url = `https://router.project-osrm.org/nearest/v1/driving/${lng},${lat}?number=1`;
+            const response = await fetch(url);
+            const data = await response.json();
+            if (data.code === 'Ok' && data.waypoints.length > 0) {
+                return [data.waypoints[0].location[1], data.waypoints[0].location[0]];
+            }
+            throw new Error("No road found near point");
+        }
+
+        // --- Çizim Fonksiyonları ---
+
+        function startDrawing() {
+            if (!gameActive) return;
+            isDrawing = true;
+            drawnPoints = [];
+            
+            // Butonları güncelle
+            document.getElementById('btnStartDraw').disabled = true;
+            document.getElementById('btnFinishDraw').disabled = false;
+            
+            // Harita imlecini değiştir
+            document.getElementById('map').style.cursor = 'crosshair';
+            
+            log("Drawing mode ON. Click on the map to draw path.", "log-info");
+        }
+
+        function addDrawingPoint(latlng) {
+            drawnPoints.push([latlng.lat, latlng.lng]);
+            
+            // Mevcut çizgiyi güncelle
+            if (drawnPolyline) map.removeLayer(drawnPolyline);
+            
+            drawnPolyline = L.polyline(drawnPoints, {
+                color: '#2979FF', // Mavi renk
+                weight: 5,
+                opacity: 0.7
+            }).addTo(map);
+        }
+
+        function finishDrawing() {
+            isDrawing = false;
+            document.getElementById('map').style.cursor = '';
+            document.getElementById('btnStartDraw').disabled = false;
+            document.getElementById('btnFinishDraw').disabled = true;
+
+            if (drawnPoints.length < 2) {
+                log("Path too short! Try again.", "log-error");
+                resetDrawingLayer();
+                return;
+            }
+
+            validateMission();
+        }
+
+        function resetDrawingLayer() {
+            if (drawnPolyline) map.removeLayer(drawnPolyline);
+            drawnPoints = [];
+            drawnPolyline = null;
+        }
+
+        // --- Doğrulama ve Puanlama (Turf.js + OSRM) ---
+
+        async function validateMission() {
+            log("Validating route...", "log-info");
+
+            // 1. Kontrol: Başlangıç ve Bitiş noktalarına yakınlık (Turf.js)
+            const startPoint = turf.point([drawnPoints[0][1], drawnPoints[0][0]]); // Lng, Lat
+            const endPoint = turf.point([drawnPoints[drawnPoints.length-1][1], drawnPoints[drawnPoints.length-1][0]]);
+            
+            const taxiPoint = turf.point([currentMission.taxi[1], currentMission.taxi[0]]);
+            const passPoint = turf.point([currentMission.passenger[1], currentMission.passenger[0]]);
+
+            const distStart = turf.distance(startPoint, taxiPoint, {units: 'meters'});
+            const distEnd = turf.distance(endPoint, passPoint, {units: 'meters'});
+
+            // 50 metre tolerans
+            if (distStart > 100 || distEnd > 100) {
+                log(`Missed the target! Start: ${Math.round(distStart)}m, End: ${Math.round(distEnd)}m off.`, "log-error");
+                // Ceza: Puan yok, zaman kaybı zaten oldu.
+                return;
+            }
+
+            // 2. Kontrol: OSRM ile en kısa rotayı çek ve karşılaştır
+            const url = `https://router.project-osrm.org/route/v1/driving/${currentMission.taxi[1]},${currentMission.taxi[0]};${currentMission.passenger[1]},${currentMission.passenger[0]}?overview=false`;
+            
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (data.code !== 'Ok') throw new Error("Routing failed");
+
+                const optimalDistance = data.routes[0].distance; // Metre cinsinden
+                
+                // Oyuncunun çizdiği mesafe (Turf.js length)
+                const playerLine = turf.lineString(drawnPoints.map(p => [p[1], p[0]]));
+                const playerDistance = turf.length(playerLine, {units: 'meters'});
+
+                // Puanlama Algoritması
+                let missionScore = 0;
+                let message = "";
+
+                // Eğer oyuncu rotası, en kısa rotadan %30 daha uzun değilse kabul et
+                if (playerDistance <= optimalDistance * 1.3) {
+                    missionScore = 100;
+                    message = "Great Route! 🌟";
+                    
+                    // Ekstra verimlilik bonusu (%10 fark)
+                    if (playerDistance <= optimalDistance * 1.1) {
+                        missionScore += 50;
+                        message = "Perfect Efficiency! 🚀";
+                    }
+
+                } else {
+                    missionScore = 20; // Teselli puanı
+                    message = "Route too long, but arrived. 🐢";
+                }
+
+                // Puanı ekle
+                score += missionScore;
+                completedRoutes++;
+                
+                // İstatistiği kaydet
+                const elapsed = 180 - timer;
+                if(elapsed <= 60) stats.minute1++;
+                else if(elapsed <= 120) stats.minute2++;
+                else stats.minute3++;
+
+                updateUI();
+                log(`${message} (+${missionScore} pts). Dist: ${Math.round(playerDistance)}m (Opt: ${Math.round(optimalDistance)}m)`, "log-success");
+
+                // Yeni görev
+                setTimeout(spawnMission, 1500);
+
+            } catch (e) {
+                console.error(e);
+                log("Validation error (API). Skipping...", "log-error");
+                spawnMission();
+            }
+        }
+
+        // --- Yardımcı Fonksiyonlar ---
+        function updateUI() {
+            document.getElementById('score').innerText = score;
+            document.getElementById('routeCount').innerText = completedRoutes;
+        }
+
+        function updateTimerDisplay() {
+            let minutes = Math.floor(timer / 60);
+            let seconds = timer % 60;
+            document.getElementById('timer').innerText = 
+                `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            
+            if (timer < 30) {
+                document.getElementById('timer').style.color = 'var(--danger)';
+            }
+        }
+
+        function log(msg, type) {
+            const logArea = document.getElementById('gameLog');
+            const div = document.createElement('div');
+            div.className = `log-entry ${type}`;
+            div.innerText = `> ${msg}`;
+            logArea.prepend(div);
+        }
+
+        // --- Chart.js Grafiği ---
+        function renderChart() {
+            const ctx = document.getElementById('performanceChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['1st Minute', '2nd Minute', '3rd Minute'],
+                    datasets: [{
+                        label: 'Routes Completed',
+                        data: [stats.minute1, stats.minute2, stats.minute3],
+                        backgroundColor: [
+                            'rgba(255, 193, 7, 0.6)',
+                            'rgba(255, 193, 7, 0.6)',
+                            'rgba(255, 193, 7, 0.6)'
+                        ],
+                        borderColor: [
+                            'rgba(255, 193, 7, 1)',
+                            'rgba(255, 193, 7, 1)',
+                            'rgba(255, 193, 7, 1)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Başlat
+        initMap();
+
+    </script>
+</body>
+</html>
