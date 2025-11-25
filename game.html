@@ -99,8 +99,8 @@
         .btn-start { background-color: var(--taxi-yellow); color: #000; }
         .btn-start:hover { background-color: #ffca2c; }
 
-        .btn-draw { background-color: #2196F3; color: white; }
-        .btn-draw:disabled { background-color: #555; cursor: not-allowed; }
+        /* Drawing butonu artık gizli olabilir veya sadece gösterge */
+        .btn-draw { background-color: #2196F3; color: white; display: none; } 
 
         .btn-finish { background-color: var(--success); color: white; }
         .btn-finish:disabled { background-color: #555; }
@@ -120,6 +120,7 @@
         .log-success { color: var(--success); }
         .log-error { color: var(--danger); }
         .log-info { color: #aaa; }
+        .log-action { color: var(--taxi-yellow); font-weight: bold; }
 
         /* --- Modal (Chart) --- */
         .modal {
@@ -144,9 +145,28 @@
 
         /* Custom Leaflet Icons */
         .emoji-icon {
-            font-size: 24px;
+            font-size: 28px; /* Biraz büyüttük */
             text-align: center;
-            line-height: 24px;
+            line-height: 28px;
+            cursor: pointer; /* Tıklanabilir olduğu belli olsun */
+            transition: transform 0.2s;
+        }
+        .emoji-icon:hover {
+            transform: scale(1.2);
+        }
+        
+        /* Loading Indicator for Async Ops */
+        .loading-overlay {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            display: none;
+            z-index: 1000;
+            pointer-events: none;
         }
 
     </style>
@@ -156,7 +176,7 @@
     <header>
         <h1>Route Master 🚕</h1>
         <div class="game-stats">
-            <div class="stat-box">TIME: <span id="timer">03:00</span></div>
+            <div class="stat-box">TIME: <span id="timer">01:30</span></div>
             <div class="stat-box">SCORE: <span id="score">0</span></div>
             <div class="stat-box">ROUTES: <span id="routeCount">0</span></div>
         </div>
@@ -167,7 +187,9 @@
 
     <div class="main-container">
         <!-- Harita Alanı -->
-        <div id="map"></div>
+        <div id="map">
+            <div id="loadingIndicator" class="loading-overlay">Snap Calculating...</div>
+        </div>
 
         <!-- Kontrol Paneli -->
         <div class="sidebar">
@@ -175,11 +197,13 @@
                 <h3>Controls</h3>
                 <button id="btnStartGame" class="btn-start" onclick="startGame()">▶ START GAME</button>
                 <div id="gameControls" style="display:none;">
-                    <button id="btnStartDraw" class="btn-draw" onclick="startDrawing()">✏️ START DRAWING</button>
-                    <button id="btnFinishDraw" class="btn-finish" onclick="finishDrawing()" disabled>✅ FINISH ROUTE</button>
+                    <p id="drawingStatus" style="color:var(--taxi-yellow); font-weight:bold; margin-bottom:10px;">
+                        🚕 Click the TAXI to start!
+                    </p>
+                    <button id="btnFinishDraw" class="btn-finish" onclick="finishDrawing()" disabled>✅ FINISH ROUTE (Manual)</button>
                 </div>
                 <p style="font-size:0.8rem; color:#aaa; margin-top:10px;">
-                    <small>1. Click "Start Drawing"<br>2. Click on map to trace roads<br>3. Click "Finish Route"</small>
+                    <small>1. Click <b>TAXI</b> to start<br>2. Draw path close to passenger<br>3. Click <b>PASSENGER</b> to finish!</small>
                 </p>
             </div>
             
@@ -193,7 +217,7 @@
     <!-- Oyun Sonu Modal (Grafik) -->
     <div id="resultModal" class="modal">
         <div class="modal-content">
-            <h2 style="color:var(--taxi-yellow)">GAME OVER!</h2>
+            <h2 id="modalTitle" style="color:var(--taxi-yellow)">SHIFT COMPLETED!</h2>
             <p>Total Score: <span id="finalScore" style="font-size:1.5rem; font-weight:bold;">0</span></p>
             <div style="background:white; padding:10px; border-radius:5px; margin:20px 0;">
                 <canvas id="performanceChart"></canvas>
@@ -210,76 +234,128 @@
     <script>
         // --- Değişkenler ---
         let map;
+        let roadsLayer; 
         let taxiMarker, passengerMarker;
         let drawnPolyline;
-        let drawnPoints = [];
+        let drawnPoints = []; 
+        let keyPoints = []; 
         
         let gameActive = false;
         let isDrawing = false;
-        let timer = 180; // 3 dakika
+        let isProcessingClick = false; 
+        
+        const GAME_DURATION = 90;
+        let timer = GAME_DURATION; 
         let timerInterval;
         let score = 0;
         let completedRoutes = 0;
         
-        // Taksi ve Yolcu Koordinatları (State)
         let currentMission = {
             taxi: null,
             passenger: null
         };
 
-        // İstatistikler (Chart.js için)
         let stats = {
-            minute1: 0,
-            minute2: 0,
-            minute3: 0
+            segment1: 0, 
+            segment2: 0, 
+            segment3: 0  
         };
 
-        // --- Başlangıç Ayarları ---
-        // New York Manhattan'ı merkez alalım (Sarı taksi konsepti için)
-        const CITY_CENTER = [40.7580, -73.9855]; // Times Square
+        const CITY_CENTER = [40.7580, -73.9855]; 
         const ZOOM_LEVEL = 14;
 
         // --- Harita Yükleme ---
         function initMap() {
             map = L.map('map').setView(CITY_CENTER, ZOOM_LEVEL);
 
-            // Dark Mode Harita Katmanı (CartoDB Dark Matter)
             L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
                 attribution: '&copy; OpenStreetMap &copy; CARTO',
                 subdomains: 'abcd',
                 maxZoom: 19
             }).addTo(map);
 
-            // Tıklama olayını dinle (Çizim için)
+            loadRoadNetwork();
+
             map.on('click', function(e) {
-                if (isDrawing && gameActive) {
-                    addDrawingPoint(e.latlng);
+                if (isDrawing && gameActive && !isProcessingClick) {
+                    addSmartDrawingPoint(e.latlng);
                 }
             });
         }
+
+        async function loadRoadNetwork() {
+            log("Loading road data...", "log-info");
+            const bounds = map.getBounds();
+            
+            const query = `
+                [out:json][timeout:25];
+                (
+                  way["highway"~"^(primary|secondary|tertiary)$"]
+                  (${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()});
+                );
+                out geom;
+            `;
+
+            const url = 'https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(query);
+
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                const geoJsonFeatures = [];
+                data.elements.forEach(element => {
+                    if(element.type === 'way' && element.geometry) {
+                        const coords = element.geometry.map(p => [p.lon, p.lat]); 
+                        geoJsonFeatures.push({
+                            "type": "Feature",
+                            "properties": { "type": element.tags?.highway || "road" },
+                            "geometry": {
+                                "type": "LineString",
+                                "coordinates": coords
+                            }
+                        });
+                    }
+                });
+
+                if(roadsLayer) map.removeLayer(roadsLayer);
+
+                roadsLayer = L.geoJSON(geoJsonFeatures, {
+                    style: {
+                        color: "#333333", 
+                        weight: 2,
+                        opacity: 0.5
+                    }
+                }).addTo(map);
+                
+                roadsLayer.bringToBack();
+                log("Road network visualization loaded.", "log-success");
+
+            } catch (e) {
+                console.warn("Overpass load failed:", e);
+                log("Could not load road visuals (API limit).", "log-info");
+            }
+        }
+
 
         // --- Oyun Mantığı ---
 
         function startGame() {
             if (gameActive) return;
             
-            // Sıfırla
             score = 0;
             completedRoutes = 0;
-            timer = 180;
-            stats = { minute1: 0, minute2: 0, minute3: 0 };
+            timer = GAME_DURATION;
+            stats = { segment1: 0, segment2: 0, segment3: 0 };
             updateUI();
             
             document.getElementById('gameLog').innerHTML = '';
-            log("Game Started! 3 minutes remaining.", "log-info");
+            log("Shift Started! 1m 30s remaining.", "log-info");
 
-            // UI Güncelle
             document.getElementById('btnStartGame').style.display = 'none';
             document.getElementById('gameControls').style.display = 'block';
             
             gameActive = true;
 
-            // Zamanlayıcıyı Başlat
             timerInterval = setInterval(() => {
                 timer--;
                 updateTimerDisplay();
@@ -295,50 +371,133 @@
             clearInterval(timerInterval);
             gameActive = false;
             
-            // Modalı göster
             document.getElementById('resultModal').style.display = 'flex';
             document.getElementById('finalScore').innerText = score;
+
+            const titleEl = document.getElementById('modalTitle');
+            if (score >= 500) {
+                titleEl.innerText = "LEGENDARY DRIVER! 🏆";
+                titleEl.style.color = "#4CAF50"; 
+            } else if (score >= 200) {
+                titleEl.innerText = "GREAT SHIFT! 🚕";
+                titleEl.style.color = "#FFC107"; 
+            } else {
+                titleEl.innerText = "SHIFT ENDED 🛑";
+                titleEl.style.color = "#F44336"; 
+            }
             
             renderChart();
         }
 
-        // --- Görev Oluşturma (OSRM Nearest) ---
+        // --- Görev Oluşturma ---
         async function spawnMission() {
             resetDrawingLayer();
-            log("Searching for new fare...", "log-info");
+            isDrawing = false; 
+            document.getElementById('drawingStatus').innerText = "🚕 Click the TAXI to start!";
+            document.getElementById('map').style.cursor = '';
+            document.getElementById('btnFinishDraw').disabled = true;
 
-            // Harita sınırları içinde rastgele nokta bul
+            // --- DEĞİŞİKLİK 1: Zoom Kontrolü ---
+            // Eğer çok yakınlaşılmışsa (Zoom > 15), biraz uzaklaştır ki alan açılsın
+            if (map.getZoom() > 15) {
+                map.setZoom(15);
+            }
+
+            log("New mission! Searching location...", "log-info");
+
             const bounds = map.getBounds();
-            const rLat1 = bounds.getSouth() + Math.random() * (bounds.getNorth() - bounds.getSouth());
-            const rLng1 = bounds.getWest() + Math.random() * (bounds.getEast() - bounds.getWest());
             
-            const rLat2 = bounds.getSouth() + Math.random() * (bounds.getNorth() - bounds.getSouth());
-            const rLng2 = bounds.getWest() + Math.random() * (bounds.getEast() - bounds.getWest());
+            // Rastgele koordinat üretici
+            const getRandomCoord = () => {
+                return {
+                    lat: bounds.getSouth() + Math.random() * (bounds.getNorth() - bounds.getSouth()),
+                    lng: bounds.getWest() + Math.random() * (bounds.getEast() - bounds.getWest())
+                };
+            };
 
-            // OSRM ile en yakın yola "yapıştır" (Snap to road)
+            // --- DEĞİŞİKLİK 2: Mesafe Sınırlaması Döngüsü ---
+            let rP1 = getRandomCoord();
+            let rP2 = getRandomCoord();
+            const MIN_DISTANCE_METERS = 1000; // En az 1000 metre mesafe olsun
+            
+            let attempts = 0;
+            // Maksimum 15 deneme yap, eğer bulunamazsa olduğu gibi kabul et (donmayı önlemek için)
+            while (attempts < 15) {
+                const pt1 = turf.point([rP1.lng, rP1.lat]);
+                const pt2 = turf.point([rP2.lng, rP2.lat]);
+                const dist = turf.distance(pt1, pt2, {units: 'meters'});
+                
+                if (dist > MIN_DISTANCE_METERS) {
+                    break; // Mesafe yeterli, döngüden çık
+                }
+                
+                // Mesafe yetersiz, 2. noktayı yeniden üret
+                rP2 = getRandomCoord();
+                attempts++;
+            }
+            
+            if (attempts >= 15) {
+                log("Area small, short route generated.", "log-info");
+            }
+
             try {
-                const p1 = await snapToRoad(rLat1, rLng1);
-                const p2 = await snapToRoad(rLat2, rLng2);
+                // Snap işlemi (rP1 ve rP2 kullanıyoruz artık)
+                const p1 = await snapToRoad(rP1.lat, rP1.lng);
+                const p2 = await snapToRoad(rP2.lat, rP2.lng);
 
                 currentMission.taxi = p1;
                 currentMission.passenger = p2;
 
-                // Markerları ekle
                 if (taxiMarker) map.removeLayer(taxiMarker);
                 if (passengerMarker) map.removeLayer(passengerMarker);
 
                 const taxiIcon = L.divIcon({className: 'emoji-icon', html: '🚕', iconSize: [30, 30]});
                 const passIcon = L.divIcon({className: 'emoji-icon', html: '🧍', iconSize: [30, 30]});
 
-                taxiMarker = L.marker(p1, {icon: taxiIcon}).addTo(map).bindPopup("Start Here").openPopup();
-                passengerMarker = L.marker(p2, {icon: passIcon}).addTo(map).bindPopup("Drop Here");
+                taxiMarker = L.marker(p1, {icon: taxiIcon}).addTo(map)
+                    .bindPopup("<b>CLICK ME</b><br>to start drawing!")
+                    .openPopup();
+                
+                taxiMarker.on('click', function() {
+                    if(gameActive && !isDrawing) {
+                        startDrawingFromTaxi();
+                    }
+                });
 
-                log("New Fare! Connect Taxi 🚕 to Passenger 🧍", "log-success");
+                passengerMarker = L.marker(p2, {icon: passIcon}).addTo(map)
+                    .bindPopup("Come closer to click!");
+                
+                passengerMarker.on('click', async function() {
+                    if (gameActive && isDrawing && !isProcessingClick) {
+                        if (drawnPoints.length === 0) {
+                             log("Start from the Taxi first!", "log-error");
+                             return;
+                        }
+
+                        const lastPoint = drawnPoints[drawnPoints.length - 1];
+                        const lastTurfPoint = turf.point([lastPoint[1], lastPoint[0]]); 
+                        const passengerTurfPoint = turf.point([currentMission.passenger[1], currentMission.passenger[0]]); 
+
+                        const distanceToPassenger = turf.distance(lastTurfPoint, passengerTurfPoint, {units: 'meters'});
+
+                        const FINISH_THRESHOLD = 30; 
+
+                        if (distanceToPassenger > FINISH_THRESHOLD) {
+                            log(`Too far! Come closer. (${Math.round(distanceToPassenger)}m left)`, "log-error");
+                            return; 
+                        }
+
+                        log("Arrived! Finishing route...", "log-info");
+                        finishDrawing();
+                    }
+                });
+
+                log("Mission Ready: Click the TAXI to start drawing!", "log-action");
 
             } catch (error) {
                 console.error(error);
-                log("Error finding road. Retrying...", "log-error");
-                spawnMission(); // Retry
+                log("Retrying location...", "log-error");
+                spawnMission(); 
             }
         }
 
@@ -352,47 +511,95 @@
             throw new Error("No road found near point");
         }
 
+        async function getRouteSegment(p1, p2) {
+            const url = `https://router.project-osrm.org/route/v1/driving/${p1[1]},${p1[0]};${p2[1]},${p2[0]}?overview=full&geometries=geojson`;
+            const response = await fetch(url);
+            const data = await response.json();
+            
+            if (data.code === 'Ok' && data.routes.length > 0) {
+                return data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+            }
+            return null;
+        }
+
         // --- Çizim Fonksiyonları ---
 
-        function startDrawing() {
+        function startDrawingFromTaxi() {
             if (!gameActive) return;
             isDrawing = true;
             drawnPoints = [];
+            keyPoints = [];
             
-            // Butonları güncelle
-            document.getElementById('btnStartDraw').disabled = true;
+            document.getElementById('drawingStatus').innerText = "✏️ Drawing... Get close to Passenger!";
             document.getElementById('btnFinishDraw').disabled = false;
-            
-            // Harita imlecini değiştir
             document.getElementById('map').style.cursor = 'crosshair';
             
-            log("Drawing mode ON. Click on the map to draw path.", "log-info");
+            taxiMarker.closePopup();
+            
+            const startPoint = currentMission.taxi; 
+            
+            keyPoints.push(startPoint);
+            drawnPoints.push(startPoint);
+            updatePolyline();
+
+            log("Started! Click on roads towards the passenger.", "log-action");
         }
 
-        function addDrawingPoint(latlng) {
-            drawnPoints.push([latlng.lat, latlng.lng]);
-            
-            // Mevcut çizgiyi güncelle
+        async function addSmartDrawingPoint(latlng) {
+            isProcessingClick = true;
+            document.getElementById('loadingIndicator').style.display = 'block';
+            document.getElementById('map').style.cursor = 'wait';
+
+            try {
+                const snappedPoint = await snapToRoad(latlng.lat, latlng.lng);
+                
+                if (keyPoints.length > 0) {
+                    const lastPoint = keyPoints[keyPoints.length - 1];
+                    const segmentGeometry = await getRouteSegment(lastPoint, snappedPoint);
+                    
+                    if (segmentGeometry) {
+                        drawnPoints = drawnPoints.concat(segmentGeometry);
+                    } else {
+                        drawnPoints.push(snappedPoint);
+                    }
+                } else {
+                    drawnPoints.push(snappedPoint);
+                }
+
+                keyPoints.push(snappedPoint);
+                updatePolyline();
+
+            } catch (e) {
+                console.log("Snap failed", e);
+                log("Click closer to a road.", "log-error");
+            } finally {
+                isProcessingClick = false;
+                document.getElementById('loadingIndicator').style.display = 'none';
+                document.getElementById('map').style.cursor = 'crosshair';
+            }
+        }
+
+        function updatePolyline() {
             if (drawnPolyline) map.removeLayer(drawnPolyline);
             
             drawnPolyline = L.polyline(drawnPoints, {
-                color: '#2979FF', // Mavi renk
-                weight: 5,
-                opacity: 0.7
+                color: '#2979FF',
+                weight: 6,
+                opacity: 0.8,
+                lineJoin: 'round'
             }).addTo(map);
         }
 
         function finishDrawing() {
-            isDrawing = false;
-            document.getElementById('map').style.cursor = '';
-            document.getElementById('btnStartDraw').disabled = false;
-            document.getElementById('btnFinishDraw').disabled = true;
-
-            if (drawnPoints.length < 2) {
-                log("Path too short! Try again.", "log-error");
-                resetDrawingLayer();
+            if (!isDrawing || drawnPoints.length < 2) {
+                log("Please draw a route to the passenger first!", "log-error");
                 return;
             }
+
+            isDrawing = false;
+            document.getElementById('map').style.cursor = '';
+            document.getElementById('btnFinishDraw').disabled = true;
+            document.getElementById('drawingStatus').innerText = "Validating...";
 
             validateMission();
         }
@@ -400,16 +607,16 @@
         function resetDrawingLayer() {
             if (drawnPolyline) map.removeLayer(drawnPolyline);
             drawnPoints = [];
+            keyPoints = [];
             drawnPolyline = null;
         }
 
-        // --- Doğrulama ve Puanlama (Turf.js + OSRM) ---
+        // --- Doğrulama ve Puanlama ---
 
         async function validateMission() {
             log("Validating route...", "log-info");
 
-            // 1. Kontrol: Başlangıç ve Bitiş noktalarına yakınlık (Turf.js)
-            const startPoint = turf.point([drawnPoints[0][1], drawnPoints[0][0]]); // Lng, Lat
+            const startPoint = turf.point([drawnPoints[0][1], drawnPoints[0][0]]);
             const endPoint = turf.point([drawnPoints[drawnPoints.length-1][1], drawnPoints[drawnPoints.length-1][0]]);
             
             const taxiPoint = turf.point([currentMission.taxi[1], currentMission.taxi[0]]);
@@ -418,14 +625,12 @@
             const distStart = turf.distance(startPoint, taxiPoint, {units: 'meters'});
             const distEnd = turf.distance(endPoint, passPoint, {units: 'meters'});
 
-            // 50 metre tolerans
-            if (distStart > 100 || distEnd > 100) {
-                log(`Missed the target! Start: ${Math.round(distStart)}m, End: ${Math.round(distEnd)}m off.`, "log-error");
-                // Ceza: Puan yok, zaman kaybı zaten oldu.
+            if (distEnd > 150) {
+                log(`Didn't reach the passenger! (${Math.round(distEnd)}m away)`, "log-error");
+                setTimeout(spawnMission, 2000);
                 return;
             }
 
-            // 2. Kontrol: OSRM ile en kısa rotayı çek ve karşılaştır
             const url = `https://router.project-osrm.org/route/v1/driving/${currentMission.taxi[1]},${currentMission.taxi[0]};${currentMission.passenger[1]},${currentMission.passenger[0]}?overview=false`;
             
             try {
@@ -434,51 +639,43 @@
                 
                 if (data.code !== 'Ok') throw new Error("Routing failed");
 
-                const optimalDistance = data.routes[0].distance; // Metre cinsinden
-                
-                // Oyuncunun çizdiği mesafe (Turf.js length)
+                const optimalDistance = data.routes[0].distance;
                 const playerLine = turf.lineString(drawnPoints.map(p => [p[1], p[0]]));
                 const playerDistance = turf.length(playerLine, {units: 'meters'});
 
-                // Puanlama Algoritması
                 let missionScore = 0;
                 let message = "";
 
-                // Eğer oyuncu rotası, en kısa rotadan %30 daha uzun değilse kabul et
                 if (playerDistance <= optimalDistance * 1.3) {
                     missionScore = 100;
                     message = "Great Route! 🌟";
                     
-                    // Ekstra verimlilik bonusu (%10 fark)
-                    if (playerDistance <= optimalDistance * 1.1) {
+                    if (playerDistance <= optimalDistance * 1.05) {
                         missionScore += 50;
                         message = "Perfect Efficiency! 🚀";
                     }
 
                 } else {
-                    missionScore = 20; // Teselli puanı
-                    message = "Route too long, but arrived. 🐢";
+                    missionScore = 20;
+                    message = "Route too long. 🐢";
                 }
 
-                // Puanı ekle
                 score += missionScore;
                 completedRoutes++;
                 
-                // İstatistiği kaydet
-                const elapsed = 180 - timer;
-                if(elapsed <= 60) stats.minute1++;
-                else if(elapsed <= 120) stats.minute2++;
-                else stats.minute3++;
+                const elapsed = GAME_DURATION - timer;
+                if(elapsed <= 30) stats.segment1++;
+                else if(elapsed <= 60) stats.segment2++;
+                else stats.segment3++;
 
                 updateUI();
-                log(`${message} (+${missionScore} pts). Dist: ${Math.round(playerDistance)}m (Opt: ${Math.round(optimalDistance)}m)`, "log-success");
+                log(`${message} (+${missionScore} pts).`, "log-success");
 
-                // Yeni görev
                 setTimeout(spawnMission, 1500);
 
             } catch (e) {
                 console.error(e);
-                log("Validation error (API). Skipping...", "log-error");
+                log("Validation error. Skipping...", "log-error");
                 spawnMission();
             }
         }
@@ -514,37 +711,23 @@
             new Chart(ctx, {
                 type: 'bar',
                 data: {
-                    labels: ['1st Minute', '2nd Minute', '3rd Minute'],
+                    labels: ['0-30s', '30-60s', '60-90s'],
                     datasets: [{
                         label: 'Routes Completed',
-                        data: [stats.minute1, stats.minute2, stats.minute3],
-                        backgroundColor: [
-                            'rgba(255, 193, 7, 0.6)',
-                            'rgba(255, 193, 7, 0.6)',
-                            'rgba(255, 193, 7, 0.6)'
-                        ],
-                        borderColor: [
-                            'rgba(255, 193, 7, 1)',
-                            'rgba(255, 193, 7, 1)',
-                            'rgba(255, 193, 7, 1)'
-                        ],
+                        data: [stats.segment1, stats.segment2, stats.segment3],
+                        backgroundColor: '#FFC107',
+                        borderColor: '#FFB300',
                         borderWidth: 1
                     }]
                 },
                 options: {
                     scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: {
-                                stepSize: 1
-                            }
-                        }
+                        y: { beginAtZero: true, ticks: { stepSize: 1 } }
                     }
                 }
             });
         }
 
-        // Başlat
         initMap();
 
     </script>
