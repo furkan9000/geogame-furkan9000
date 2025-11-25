@@ -6,9 +6,9 @@
     <title>Route Master - Home</title>
     <style>
         :root {
-            --taxi-yellow: #FFC107; 
+            --taxi-yellow: #FFC107; /* Taxi yellow */
             --taxi-dark: #FFB300;
-            --asphalt: #212121; 
+            --asphalt: #212121; /* Asphalt color */
             --dark-grey: #121212;
             --light: #F5F5F5;
             --accent-blue: #2979FF;
@@ -30,7 +30,7 @@
             min-height: 100vh;
         }
 
-        
+        /* Hero Section */
         .hero {
             background: linear-gradient(135deg, rgba(0,0,0,0.8), rgba(0,0,0,0.6)), url('https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?q=80&w=2070&auto=format&fit=crop'); 
             background-size: cover;
@@ -87,6 +87,12 @@
         .instructions {
             padding: 60px 20px;
             background-color: var(--asphalt);
+        }
+
+        /* Pro Tips Section (New) */
+        .pro-tips {
+            padding: 60px 20px;
+            background-color: #1a1a1a;
             flex-grow: 1;
         }
 
@@ -149,7 +155,18 @@
             color: #ccc;
         }
 
-       
+        /* Tip Card Specific Styles */
+        .tip-card {
+            border-left: 5px solid var(--taxi-yellow);
+            text-align: left;
+        }
+        .tip-card h3 {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* Footer */
         footer {
             background-color: #000;
             text-align: center;
@@ -159,7 +176,7 @@
             border-top: 1px solid #333;
         }
 
-       
+        /* Responsive */
         @media (max-width: 768px) {
             .hero h1 { font-size: 2.5rem; }
             .hero p { font-size: 1.1rem; }
@@ -169,52 +186,89 @@
 </head>
 <body>
 
-   
+    <!-- Hero Section -->
     <header class="hero">
         <h1>Route Master</h1>
         <p>Take the wheel on real city maps. Draw the shortest route, deliver passengers, race against time!</p>
-       <a href="game.html" class="start-btn">START GAME</a>
+        <a href="game.html" class="start-btn">START GAME</a>
     </header>
 
-
+    <!-- Instructions Section -->
     <section class="instructions">
         <div class="container">
             <h2 class="section-title">How to Play?</h2>
             
             <div class="steps-grid">
-              
+                <!-- Step 1 -->
                 <div class="step-card">
                     <span class="icon">🚕</span>
                     <h3>Locate Target</h3>
-                    <p>A random <strong>Taxi</strong> and <strong>Passenger</strong> will appear on the map when the game starts. Find them immediately!</p>
+                    <p>A random <strong>Taxi</strong> and <strong>Passenger</strong> will appear. Find them immediately!</p>
                 </div>
 
-              
+                <!-- Step 2 -->
                 <div class="step-card">
                     <span class="icon">✏️</span>
                     <h3>Draw Route</h3>
-                    <p>Click the "Start Drawing" button. Use your mouse to follow the roads and draw the shortest route from taxi to passenger.</p>
+                    <p>Click the <strong>Taxi</strong> to start. Click on roads to draw the shortest path to the passenger.</p>
                 </div>
 
+                <!-- Step 3 -->
+                <div class="step-card">
+                    <span class="icon">🧍</span>
+                    <h3>Finish</h3>
+                    <p>Get close to the passenger (within 50m) and click the <strong>Passenger icon</strong> to complete the route.</p>
+                </div>
+
+                <!-- Step 4 -->
                 <div class="step-card">
                     <span class="icon">⏱️</span>
-                    <h3>Race Against Time</h3>
-                    <p>You have <strong>3 minutes</strong> in total. Each successful route earns points. Incorrect drawings cost you time.</p>
+                    <h3>Score High</h3>
+                    <p>You have <strong>90 seconds</strong>. Shorter and faster routes earn more points!</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pro Tips Section (YENİ EKLENEN KISIM) -->
+    <section class="pro-tips">
+        <div class="container">
+            <h2 class="section-title">Pro Driving Tips 🧠</h2>
+            <p style="text-align: center; color: #aaa; margin-bottom: 40px; max-width: 700px; margin-left: auto; margin-right: auto;">
+                The game uses a real-world driving engine (OSRM). Just like a real car, it must follow traffic rules. Understanding this is key to becoming a Legend Driver!
+            </p>
+            
+            <div class="steps-grid">
+                <!-- Tip 1: Traffic Rules -->
+                <div class="step-card tip-card">
+                    <h3>🔄 Mind One-Way Streets</h3>
+                    <p>If you click against the traffic flow on a one-way street, the car cannot go backwards. It will calculate a long route looping around the block to reach that point legally.</p>
                 </div>
 
-                <div class="step-card">
-                    <span class="icon">🏆</span>
-                    <h3>Score High</h3>
-                    <p>Earn extra points by drawing the shortest and most accurate path. Try to break your record before time runs out!</p>
+                <!-- Tip 2: Divided Roads -->
+                <div class="step-card tip-card">
+                    <h3>🛣️ Divided Highways</h3>
+                    <p>On big roads with separators (refuges), clicking the wrong lane (opposite side) forces a U-turn at the next exit, wasting huge distance. <strong>Zoom in</strong> to pick the right lane!</p>
+                </div>
+
+                <!-- Tip 3: Click Strategy -->
+                <div class="step-card tip-card">
+                    <h3>📍 Click Frequently</h3>
+                    <p>Don't just click start and end. Place points frequently at <strong>intersections and turns</strong> to force the specific route you want to take.</p>
+                </div>
+
+                <!-- Tip 4: Bridges -->
+                <div class="step-card tip-card">
+                    <h3>🌉 Bridges & Underpasses</h3>
+                    <p>Be careful with overlapping roads. If you click a bridge but the system snaps you to the road below, your route will detour to find a ramp. Click clearly on the road surface.</p>
                 </div>
             </div>
         </div>
     </section>
 
     <footer>
-        <p>Developer: Furkan Ateş • GMT-458 – Web GIS • 2025-2026</p>
+        <p>Developer: Furkan Ateş • GMT 458 – Web GIS • 2025-2026</p>
     </footer>
 
 </body>
 </html>
-
