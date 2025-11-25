@@ -74,4 +74,4 @@ How many lives, if any, will the user have?
 
 There will not be a "lives" system in the game.
 
-The core mechanic of the game is a race against time. If the player draws an invalid route or chooses an inefficient path, their penalty will not be "losing a life" but "losing time" A failed attempt does not award points and causes the player to waste valuable seconds on that pair of points. This maintains the game's flow and is more suitable for the "Time-Attack" format.
+The core mechanic of the game is a race against time. If the player draws an invalid route or chooses an inefficient path, their penalty will not be "losing a life" but "losing time" A failed attempt does not award points and causes the player to waste valuable seconds on that pair of points. This maintains the game's flow and is more suitable for the "Time-Attack" format. 
